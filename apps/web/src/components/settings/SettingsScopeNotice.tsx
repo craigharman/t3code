@@ -1,4 +1,8 @@
-import { resolveEnvironmentMachineKind, type EnvironmentId } from "@t3tools/contracts";
+import {
+  resolveEnvironmentMachineKind,
+  type EnvironmentId,
+  type EnvironmentMachineKind,
+} from "@t3tools/contracts";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon, LayersIcon } from "lucide-react";
 import type { ReactNode } from "react";
@@ -18,14 +22,15 @@ import {
   projectScopeMenuGroups,
   selectProjectAxis,
   settingsScopeEnvironmentAddress,
+  settingsScopeEnvironmentLabel,
   settingsScopeEnvironmentLabels,
-  settingsScopeProjectMachines,
 } from "./settingsScopeAxis";
 
 interface ScopeChoice {
   label: string;
   secondary?: string;
   icon: ReactNode;
+  servers?: readonly { id: string; label: string; kind: EnvironmentMachineKind }[];
   search: SettingsScopeSearch;
 }
 
@@ -86,17 +91,25 @@ export function SettingsScopeNotice({
       : target === "project"
         ? projectGroups.map((group) => ({
             label: group.displayName,
-            secondary: [
-              ...(group.archived ? ["Archived"] : []),
-              ...(projectGroups.some(
-                (other) =>
-                  other.projectKey !== group.projectKey && other.displayName === group.displayName,
-              )
-                ? settingsScopeProjectMachines(group, environments)
-                : []),
-              group.workspaceRoot,
-            ].join(" · "),
+            secondary: [...(group.archived ? ["Archived"] : []), group.workspaceRoot].join(" · "),
             icon: <ProjectFavicon project={group} className="size-4 shrink-0" />,
+            servers: group.memberProjects
+              .filter(
+                (member, index, all) =>
+                  all.findIndex((other) => other.environmentId === member.environmentId) === index,
+              )
+              .map((member) => {
+                const environment = environments.find(
+                  (entry) => entry.environmentId === member.environmentId,
+                );
+                return {
+                  id: member.environmentId,
+                  label: environment
+                    ? settingsScopeEnvironmentLabel(environment, environments)
+                    : (member.environmentLabel ?? member.environmentId),
+                  kind: resolveEnvironmentMachineKind(environment?.serverConfig ?? null),
+                };
+              }),
             search: selectProjectAxis(search, group.projectKey),
           }))
         : target === "environment"
@@ -157,6 +170,20 @@ export function SettingsScopeNotice({
               </TooltipTrigger>
               <TooltipPopup>{choice.secondary}</TooltipPopup>
             </Tooltip>
+          ) : null}
+          {choice.servers?.length ? (
+            <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground/70">
+              {choice.servers.map((server) => (
+                <span key={server.id} className="inline-flex min-w-0 items-center gap-1">
+                  <EnvironmentMachineIcon
+                    aria-hidden
+                    kind={server.kind}
+                    className="size-3.5 shrink-0"
+                  />
+                  <span className="truncate">{server.label}</span>
+                </span>
+              ))}
+            </span>
           ) : null}
         </span>
         <ChevronRightIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
